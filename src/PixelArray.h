@@ -9,6 +9,7 @@
 #define __NODE_PIXEL_ARRAY_H__
 
 #include "Canvas.h"
+#include "Image.h"
 
 class PixelArray: public node::ObjectWrap {
   public:
@@ -22,12 +23,14 @@ class PixelArray: public node::ObjectWrap {
     inline int stride(){ return _width * 4; }
     inline uint8_t *data(){ return _data; }
     PixelArray(Canvas *canvas, int x, int y, int width, int height);
+    PixelArray(Image *image, int x, int y, int width, int height);
     PixelArray(int width, int height);
     ~PixelArray();
   private:
     uint8_t *alloc();
     uint8_t *_data;
     int _width, _height;
+    void getPixels(int sx, int sy, int width, int height, bool unmultiply, uint8_t *src, int srcStride,int srcWidth, int srcHeight);
 };
 
 #endif
