@@ -6,6 +6,7 @@
 
 #include "Canvas.h"
 #include "Image.h"
+#include "ImageData.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -48,6 +49,7 @@ Image::Initialize(Nan::ADDON_REGISTER_FUNCTION_ARGS_TYPE target) {
 
   // Prototype
   Local<ObjectTemplate> proto = ctor->PrototypeTemplate();
+  Nan::SetPrototypeMethod(ctor, "toImageData", ToImageData);
   Nan::SetAccessor(proto, Nan::New("source").ToLocalChecked(), GetSource, SetSource);
   Nan::SetAccessor(proto, Nan::New("complete").ToLocalChecked(), GetComplete);
   Nan::SetAccessor(proto, Nan::New("width").ToLocalChecked(), GetWidth);
@@ -106,6 +108,63 @@ NAN_SETTER(Image::SetDataMode) {
 }
 
 #endif
+
+/*
+ * Get pixel data.
+ */
+
+NAN_METHOD(Image::ToImageData) {
+  Image *img = Nan::ObjectWrap::Unwrap<Image>(info.This());
+
+  int size = img->width * img->height * 4;
+
+  Local<ArrayBuffer> buffer = ArrayBuffer::New(Isolate::GetCurrent(), size);
+  Local<Uint8ClampedArray> clampedArray = Uint8ClampedArray::New(buffer, 0, size);
+
+  uint8_t *src = img->data();
+  uint8_t *dst = *Nan::TypedArrayContents<uint8_t>(clampedArray);
+
+  int width = img->width, height = img->height;
+  int sy = 0, sx = 0;
+  int srcStride = img->stride();
+  int dstStride = img->width * 4;
+
+  // Normalize data (argb -> rgba)
+  for (int y = 0; y < height; ++y) {
+    uint32_t *row = (uint32_t *)(src + srcStride * (y + sy));
+    for (int x = 0; x < width; ++x) {
+      int bx = x * 4;
+      uint32_t *pixel = row + x + sx;
+      uint8_t a = *pixel >> 24;
+      uint8_t r = *pixel >> 16;
+      uint8_t g = *pixel >> 8;
+      uint8_t b = *pixel;
+      dst[bx + 3] = a;
+      // if(unmultiply) {
+      //   float alpha = (float) a / 255;
+      //   dst[bx + 0] = (int)((float) r / alpha);
+      //   dst[bx + 1] = (int)((float) g / alpha);
+      //   dst[bx + 2] = (int)((float) b / alpha);
+      // }
+      // else {
+        dst[bx + 0] = r;
+        dst[bx + 1] = g;
+        dst[bx + 2] = b;
+      // }
+    }
+    dst += dstStride;
+  }
+
+  const int argc = 3;
+  Local<Int32> swHandle = Nan::New(width);
+  Local<Int32> shHandle = Nan::New(height);
+  Local<Value> argv[argc] = { clampedArray, swHandle, shHandle };
+
+  Local<FunctionTemplate> cons = Nan::New(ImageData::constructor);
+  Local<Object> instance = cons->GetFunction()->NewInstance(argc, argv);
+
+  info.GetReturnValue().Set(instance);
+}
 
 /*
  * Get width.
